@@ -1,7 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
-import { spawn } from 'child_process';
 import MarkdownIt from 'markdown-it';
 import anchor from 'markdown-it-anchor';
 import { attrs } from '@mdit/plugin-attrs';
@@ -11,10 +9,17 @@ import katex from 'katex';
 import matter from 'gray-matter';
 import { createHighlighter, Highlighter } from 'shiki';
 
+// 기본 경로
+const ROOT_DIR = path.join(__dirname, '..', '..');
+const TEMPLATE_PATH = path.join(ROOT_DIR, 'public', 'template.html');
+const CONTENT_DIR = path.join(ROOT_DIR, 'content');
+const OUTPUT_DIR = path.join(ROOT_DIR, 'dist');
+
 // Shiki 하이라이터 (싱글톤)
 let highlighter: Highlighter | null = null;
+let currentTheme = 'github-dark'; // 현재 설정된 테마 추적
 
-async function getHighlighter(): Promise<Highlighter> {
+async function ensureHighlighter(): Promise<Highlighter> {
   if (!highlighter) {
     highlighter = await createHighlighter({
       themes: [
@@ -41,12 +46,34 @@ async function getHighlighter(): Promise<Highlighter> {
   return highlighter;
 }
 
-// Markdown-it 인스턴스
+// Markdown-it 인스턴스 설정
+// Shiki 하이라이터를 markdown-it의 highlight 옵션으로 직접 통합 (Regex 후처리 제거)
 const md = new MarkdownIt({
   html: true,
   linkify: true,
   typographer: true,
-  breaks: true
+  breaks: true,
+  highlight: (code, lang) => {
+    if (!highlighter) return ''; // 아직 로드 안됨 -> 기본 escape 처리됨
+
+    try {
+      const loadedLangs = highlighter.getLoadedLanguages();
+      const langToUse = loadedLangs.includes(lang) ? lang : 'plaintext';
+      let highlighted = highlighter.codeToHtml(code, { lang: langToUse, theme: currentTheme });
+
+      // light 테마의 흰 배경을 연한 회색으로 변경 (CSS 보정)
+      if (currentTheme.includes('light') || currentTheme.includes('latte') || currentTheme === 'slack-ochin' || currentTheme === 'nord') {
+        highlighted = highlighted
+          .replace(/background-color:#fff([;"])/gi, 'background-color:#f6f8fa$1')
+          .replace(/background-color:#ffffff([;"])/gi, 'background-color:#f6f8fa$1')
+          .replace(/background-color:#fafafa([;"])/gi, 'background-color:#f0f0f0$1');
+      }
+      return highlighted;
+    } catch (e) {
+      console.warn('Highlight checking error:', e);
+      return ''; // markdown-it이 기본 escape 수행
+    }
+  }
 }).use(
   anchor, {
     permalink: false,
@@ -66,25 +93,18 @@ const md = new MarkdownIt({
   }
 );
 
+// Mermaid 펜스 룰 오버라이드
 const defaultFence = md.renderer.rules.fence!.bind(md.renderer.rules);
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
   if (token.info.trim() === 'mermaid') {
-    // mermaid 블록은 placeholder로 변환 후 나중에 SVG로 교체
+    // client-side 렌더링을 위해 div.mermaid로 감싸서 출력
     const code = token.content.trim();
-    const placeholder = `<!--MERMAID_PLACEHOLDER_${idx}-->`;
-    if (!env.mermaidBlocks) env.mermaidBlocks = [];
-    env.mermaidBlocks.push({ idx, code, placeholder });
-    return placeholder;
+    return `<div class="mermaid">${md.utils.escapeHtml(code)}</div>`;
   }
+  // 일반 코드는 markdown-it의 highlight 옵션을 통해 처리됨
   return defaultFence(tokens, idx, options, env, self);
 };
-
-// 기본 경로
-const ROOT_DIR = path.join(__dirname, '..', '..');
-const TEMPLATE_PATH = path.join(ROOT_DIR, 'public', 'template.html');
-const CONTENT_DIR = path.join(ROOT_DIR, 'content');
-const OUTPUT_DIR = path.join(ROOT_DIR, 'dist');
 
 export interface BuildResult {
   html: string;
@@ -93,7 +113,7 @@ export interface BuildResult {
 
 export interface BuildOptions {
   title?: string;
-  theme?: 'github-dark' | 'github-light';
+  theme?: string;
 }
 
 // 템플릿 로드
@@ -104,18 +124,12 @@ function loadTemplate(): string {
 // 메타데이터로 head 태그 생성
 function buildHeadTags(meta: Record<string, unknown>): string {
   const tags: string[] = [];
-
-  if (meta.description) {
-    tags.push(`<meta name="description" content="${meta.description}">`);
-  }
-  if (meta.author) {
-    tags.push(`<meta name="author" content="${meta.author}">`);
-  }
+  if (meta.description) tags.push(`<meta name="description" content="${meta.description}">`);
+  if (meta.author) tags.push(`<meta name="author" content="${meta.author}">`);
   if (meta.keywords) {
     const kw = Array.isArray(meta.keywords) ? meta.keywords.join(', ') : meta.keywords;
     tags.push(`<meta name="keywords" content="${kw}">`);
   }
-
   return tags.join('\n  ');
 }
 
@@ -123,12 +137,10 @@ function buildHeadTags(meta: Record<string, unknown>): string {
 function buildExtraHead(meta: Record<string, unknown>): string {
   const extras: string[] = [];
 
-  // tailwind: true일 때 Tailwind CSS 추가 (기본값 false)
   if (meta.tailwind === true) {
     extras.push(`<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>`);
   }
 
-  // css: 문자열 또는 배열로 여러 CSS URL 지원
   if (meta.css) {
     const cssUrls = Array.isArray(meta.css) ? meta.css : [meta.css];
     for (const url of cssUrls) {
@@ -136,152 +148,49 @@ function buildExtraHead(meta: Record<string, unknown>): string {
     }
   }
 
-  // font: 기본 폰트 패밀리 설정 (URL 요청 없이 로컬/시스템 폰트)
+  // Mermaid.js CDN 및 초기화 스크립트 추가
+  extras.push(`
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: '${currentTheme.includes('light') || currentTheme.includes('latte') ? 'default' : 'dark'}',
+        securityLevel: 'loose'
+      });
+      await mermaid.run();
+    </script>
+  `);
+
   if (meta.font) {
     extras.push(`<style>body { font-family: '${meta.font}', sans-serif; }</style>`);
-  }
-
-  // script: 외부 스크립트 URL 지원 (문자열 또는 배열)
-  if (meta.script) {
-    const scriptUrls = Array.isArray(meta.script) ? meta.script : [meta.script];
-    for (const url of scriptUrls) {
-      extras.push(`<script src="${url}"></script>`);
-    }
   }
 
   return extras.join('\n  ');
 }
 
-// body 끝에 들어갈 스크립트 생성
-function buildBodyScripts(_meta: Record<string, unknown>): string {
-  // mermaid는 이제 빌드 타임에 SVG로 변환되므로 스크립트 불필요
-  return '';
+async function renderContent(markdown: string, options: BuildOptions = {}): Promise<{ html: string; meta: Record<string, unknown> }> {
+  // 1. Shiki 하이라이터 준비 (싱글톤)
+  await ensureHighlighter();
+  
+  const { data: meta, content } = matter(markdown);
+  
+  // 2. 테마 설정 (md.highlight 콜백에서 사용됨)
+  currentTheme = options.theme || (meta.theme as string) || 'github-dark';
+  
+  // 3. 렌더링 환경 객체
+  const env: { mermaidBlocks?: Array<{ idx: number; code: string; placeholder: string }> } = {};
+
+  // 4. 마크다운 -> HTML 변환 (하이라이팅은 highlight 옵션에 의해 내부 수행됨)
+  const html = md.render(content, env);
+
+  return { html, meta };
 }
 
 /**
- * mmdc CLI 실행을 Promise로 래핑
- */
-function runMmdc(inputFile: string, outputFile: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const mmdcPath = path.join(__dirname, '..', '..', 'node_modules', '.bin', 'mmdc');
-    const puppeteerConfig = path.join(__dirname, '..', '..', 'puppeteer.config.json');
-    const args = ['-i', inputFile, '-o', outputFile, '-q', '-p', puppeteerConfig];
-    
-    const proc = spawn(mmdcPath, args, {
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    let stderr = '';
-    proc.stderr?.on('data', (data) => { stderr += data.toString(); });
-    
-    proc.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`mmdc exited with code ${code}: ${stderr}`));
-    });
-    
-    proc.on('error', reject);
-  });
-}
-
-/**
- * Mermaid 코드를 SVG로 변환
- */
-async function renderMermaidToSvg(code: string): Promise<string> {
-  const tempDir = os.tmpdir();
-  const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const inputFile = path.join(tempDir, `${id}.mmd`);
-  const outputFile = path.join(tempDir, `${id}.svg`);
-
-  try {
-    fs.writeFileSync(inputFile, code, 'utf-8');
-    await runMmdc(inputFile, outputFile);
-
-    const svg = fs.readFileSync(outputFile, 'utf-8');
-    return `<div class="mermaid-diagram">${svg}</div>`;
-  } catch (err) {
-    console.error('Mermaid rendering error:', err);
-    // 실패 시 원본 코드를 pre 태그로 반환
-    return `<pre class="mermaid-error"><code>${md.utils.escapeHtml(code)}</code></pre>`;
-  } finally {
-    // 임시 파일 정리
-    if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile);
-    if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
-  }
-}
-
-/**
- * HTML 내 mermaid placeholder를 SVG로 교체
- */
-async function replaceMermaidPlaceholders(
-  html: string,
-  mermaidBlocks: Array<{ idx: number; code: string; placeholder: string }>
-): Promise<string> {
-  let result = html;
-  
-  for (const block of mermaidBlocks) {
-    const svg = await renderMermaidToSvg(block.code);
-    result = result.replace(block.placeholder, svg);
-  }
-  
-  return result;
-}
-
-/**
- * 코드 블록에 Shiki 하이라이팅 적용
- */
-async function highlightCodeBlocks(html: string, theme: string): Promise<string> {
-  const hl = await getHighlighter();
-  const codeBlockRegex = /<pre><code class="language-(\w+)">([\s\S]*?)<\/code><\/pre>/g;
-  
-  const matches = [...html.matchAll(codeBlockRegex)];
-  let result = html;
-  
-  for (const match of matches) {
-    const [fullMatch, lang, code] = match;
-    const decodedCode = code
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
-    
-    try {
-      const loadedLangs = hl.getLoadedLanguages();
-      const langToUse = loadedLangs.includes(lang) ? lang : 'plaintext';
-      let highlighted = hl.codeToHtml(decodedCode.trim(), { lang: langToUse, theme });
-      
-      // light 테마의 흰 배경을 연한 회색으로 변경
-      if (theme.includes('light') || theme.includes('latte') || theme === 'slack-ochin' || theme === 'nord') {
-        highlighted = highlighted
-          .replace(/background-color:#fff([;"])/gi, 'background-color:#f6f8fa$1')
-          .replace(/background-color:#ffffff([;"])/gi, 'background-color:#f6f8fa$1')
-          .replace(/background-color:#fafafa([;"])/gi, 'background-color:#f0f0f0$1');
-      }
-      
-      result = result.replace(fullMatch, highlighted);
-    } catch {
-      // 하이라이팅 실패시 원본 유지
-    }
-  }
-  
-  return result;
-}
-
-/**
- * 마크다운 문자열을 완성된 HTML로 빌드
+ * 마크다운 문자열을 완성된 HTML로 빌드 (템플릿 포함)
  */
 export async function build(markdown: string, options: BuildOptions = {}): Promise<BuildResult> {
-  const { data: meta, content } = matter(markdown);
-  const env: { mermaidBlocks?: Array<{ idx: number; code: string; placeholder: string }> } = {};
-  const rendered = md.render(content, env);
-  const theme = options.theme || (meta.theme as string) || 'github-dark';
-  let highlighted = await highlightCodeBlocks(rendered, theme);
-  
-  // Mermaid placeholder를 SVG로 교체
-  if (env.mermaidBlocks && env.mermaidBlocks.length > 0) {
-    highlighted = await replaceMermaidPlaceholders(highlighted, env.mermaidBlocks);
-  }
-
+  const { html: contentHtml, meta } = await renderContent(markdown, options);
   const template = loadTemplate();
   const title = (meta.title as string) || options.title || 'Untitled';
 
@@ -290,28 +199,18 @@ export async function build(markdown: string, options: BuildOptions = {}): Promi
     .replace('{{title}}', title)
     .replace('{{meta}}', buildHeadTags(meta))
     .replace('{{head}}', buildExtraHead(meta))
-    .replace('{{content}}', highlighted)
-    .replace('{{bodyScripts}}', buildBodyScripts(meta));
+    .replace('{{content}}', contentHtml)
+    .replace('{{bodyScripts}}', '');
 
   return { html, meta };
 }
 
 /**
- * 마크다운 문자열을 HTML 본문만 렌더링 (템플릿 없이)
+ * 마크다운 문자열을 HTML 본문만 렌더링
  */
 export async function render(markdown: string, themeOverride?: string): Promise<string> {
-  const { data: meta, content } = matter(markdown);
-  const theme = themeOverride || (meta.theme as string) || 'github-dark';
-  const env: { mermaidBlocks?: Array<{ idx: number; code: string; placeholder: string }> } = {};
-  const rendered = md.render(content, env);
-  let highlighted = await highlightCodeBlocks(rendered, theme);
-  
-  // Mermaid placeholder를 SVG로 교체
-  if (env.mermaidBlocks && env.mermaidBlocks.length > 0) {
-    highlighted = await replaceMermaidPlaceholders(highlighted, env.mermaidBlocks);
-  }
-  
-  return highlighted;
+  const { html } = await renderContent(markdown, { theme: themeOverride });
+  return html;
 }
 
 /**
@@ -335,9 +234,7 @@ export async function buildAndSave(inputPath: string, outputPath?: string): Prom
   }
 
   const dir = path.dirname(outputPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
   fs.writeFileSync(outputPath, html, 'utf-8');
   return outputPath;
@@ -350,16 +247,9 @@ export function copyImgFolder(): { copied: number; skipped: boolean } {
   const srcImg = path.join(CONTENT_DIR, 'img');
   const destImg = path.join(OUTPUT_DIR, 'img');
 
-  if (!fs.existsSync(srcImg)) {
-    return { copied: 0, skipped: true };
-  }
+  if (!fs.existsSync(srcImg)) return { copied: 0, skipped: true };
+  if (!fs.existsSync(destImg)) fs.mkdirSync(destImg, { recursive: true });
 
-  // dest 폴더 생성
-  if (!fs.existsSync(destImg)) {
-    fs.mkdirSync(destImg, { recursive: true });
-  }
-
-  // 재귀적으로 파일 복사
   let copied = 0;
   function copyDir(src: string, dest: string) {
     const entries = fs.readdirSync(src, { withFileTypes: true });
@@ -367,9 +257,7 @@ export function copyImgFolder(): { copied: number; skipped: boolean } {
       const srcPath = path.join(src, entry.name);
       const destPath = path.join(dest, entry.name);
       if (entry.isDirectory()) {
-        if (!fs.existsSync(destPath)) {
-          fs.mkdirSync(destPath, { recursive: true });
-        }
+        if (!fs.existsSync(destPath)) fs.mkdirSync(destPath, { recursive: true });
         copyDir(srcPath, destPath);
       } else {
         fs.copyFileSync(srcPath, destPath);
@@ -386,20 +274,19 @@ export function copyImgFolder(): { copied: number; skipped: boolean } {
  * content 폴더 전체 빌드
  */
 export async function buildAll(): Promise<Array<{ input: string; output: string }>> {
-  if (!fs.existsSync(CONTENT_DIR)) {
-    return [];
-  }
+  if (!fs.existsSync(CONTENT_DIR)) return [];
 
   const files = fs.readdirSync(CONTENT_DIR).filter(f => f.endsWith('.md'));
-  const outputs: Array<{ input: string; output: string }> = [];
-
-  for (const file of files) {
+  
+  // 병렬 빌드 처리
+  const buildPromises = files.map(async (file) => {
     const inputPath = path.join(CONTENT_DIR, file);
     const outputPath = await buildAndSave(inputPath);
-    outputs.push({ input: file, output: outputPath });
-  }
+    return { input: file, output: outputPath };
+  });
 
-  // img 폴더 복사
+  const outputs = await Promise.all(buildPromises);
+
   const imgResult = copyImgFolder();
   if (!imgResult.skipped) {
     console.log(`🖼️  이미지 ${imgResult.copied}개 복사됨`);
@@ -408,9 +295,6 @@ export async function buildAll(): Promise<Array<{ input: string; output: string 
   return outputs;
 }
 
-/**
- * markdown-it 인스턴스 반환 (플러그인 추가용)
- */
 export function getInstance(): MarkdownIt {
   return md;
 }
@@ -418,32 +302,27 @@ export function getInstance(): MarkdownIt {
 // CLI 실행
 async function main() {
   const args = process.argv.slice(2);
-
   console.log('📦 빌드 시작...\n');
 
-  if (args.length > 0) {
-    for (const file of args) {
-      try {
+  try {
+    if (args.length > 0) {
+      for (const file of args) {
         const inputPath = path.isAbsolute(file) ? file : path.join(CONTENT_DIR, file);
         const outputPath = await buildAndSave(inputPath);
         console.log(`✅ ${path.basename(file)} → ${path.basename(outputPath)}`);
-      } catch (err) {
-        console.error(`❌ ${file}: ${(err as Error).message}`);
+      }
+      copyImgFolder();
+    } else {
+      const results = await buildAll();
+      for (const { input, output } of results) {
+        console.log(`✅ ${input} → ${path.basename(output)}`);
       }
     }
-    // 단일 파일 빌드에서도 img 폴더 복사
-    const imgResult = copyImgFolder();
-    if (!imgResult.skipped) {
-      console.log(`🖼️  이미지 ${imgResult.copied}개 복사됨`);
-    }
-  } else {
-    const results = await buildAll();
-    for (const { input, output } of results) {
-      console.log(`✅ ${input} → ${path.basename(output)}`);
-    }
+    console.log(`\n📁 출력: ${OUTPUT_DIR}`);
+  } catch (err) {
+    console.error(`❌ 오류 발생: ${(err as Error).message}`);
+    process.exit(1);
   }
-
-  console.log(`\n📁 출력: ${OUTPUT_DIR}`);
 }
 
 if (require.main === module) {
