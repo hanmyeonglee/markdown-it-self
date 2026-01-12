@@ -4,7 +4,7 @@ const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
-const renderer = require('./renderer');
+const builder = require('../build/builder');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,23 +18,23 @@ const CONTENT_DIR = path.join(__dirname, 'content');
 const DEFAULT_FILE = 'sample.md';
 
 // 마크다운 파일 읽기 및 렌더링
-function renderMarkdown(filename = DEFAULT_FILE) {
+function getRenderedContent(filename = DEFAULT_FILE) {
   const filePath = path.join(CONTENT_DIR, filename);
   
   if (!fs.existsSync(filePath)) {
     return { html: '<p>파일을 찾을 수 없습니다.</p>', error: true };
   }
   
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const html = renderer.render(content);
+  const markdown = fs.readFileSync(filePath, 'utf-8');
+  const html = builder.render(markdown);
   
-  return { html, filename, raw: content };
+  return { html, filename };
 }
 
 // API: 마크다운 렌더링
 app.get('/api/render', (req, res) => {
   const filename = req.query.file || DEFAULT_FILE;
-  const result = renderMarkdown(filename);
+  const result = getRenderedContent(filename);
   res.json(result);
 });
 
@@ -54,7 +54,7 @@ wss.on('connection', (ws) => {
   console.log('🔌 클라이언트 연결됨');
   
   // 초기 렌더링 전송
-  const result = renderMarkdown();
+  const result = getRenderedContent();
   ws.send(JSON.stringify({ type: 'render', data: result }));
   
   ws.on('close', () => {
@@ -72,7 +72,7 @@ watcher.on('change', (filePath) => {
   const filename = path.basename(filePath);
   console.log(`📝 파일 변경 감지: ${filename}`);
   
-  const result = renderMarkdown(filename);
+  const result = getRenderedContent(filename);
   
   // 모든 연결된 클라이언트에게 업데이트 전송
   wss.clients.forEach((client) => {
