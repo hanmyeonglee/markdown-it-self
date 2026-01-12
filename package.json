@@ -1,0 +1,11 @@
+{
+  "name": "markdown-it-self",
+  "version": "1.0.0",
+  "description": "Custom markdown renderer with hot reload",
+  "dependencies": {
+    "express": "^4.18.2",
+    "markdown-it": "^14.0.0",
+    "ws": "^8.16.0",
+    "chokidar": "^3.5.3"
+  }
+}
