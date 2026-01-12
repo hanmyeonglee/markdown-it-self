@@ -9,8 +9,9 @@ keywords:
 lang: ko
 font: Pretendard
 theme: min-light
+katex: true
+mermaid: true
 css:
-  - https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css
   - https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css
 ---
 
@@ -66,6 +67,18 @@ $\frac{1}{x^2+1}$
 $$
 \int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
 $$
+
+### Mermaid 다이어그램
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant S as 서버
+    participant B as 브라우저
+    U->>S: 마크다운 수정
+    S->>B: WebSocket 알림
+    B->>B: 페이지 새로고침
+```
 
 ---
 

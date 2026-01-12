@@ -58,6 +58,18 @@ md.use(texmath, {
   katexOptions: { throwOnError: false }
 });
 
+// Mermaid 코드 블록 처리 (클라이언트 사이드 렌더링)
+const defaultFence = md.renderer.rules.fence!.bind(md.renderer.rules);
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx];
+  if (token.info.trim() === 'mermaid') {
+    // mermaid 블록은 <pre class="mermaid">로 변환하여 클라이언트에서 렌더링
+    const code = token.content.trim();
+    return `<pre class="mermaid">${md.utils.escapeHtml(code)}</pre>\n`;
+  }
+  return defaultFence(tokens, idx, options, env, self);
+};
+
 // 기본 경로
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const TEMPLATE_PATH = path.join(ROOT_DIR, 'public', 'template.html');
@@ -97,9 +109,14 @@ function buildHeadTags(meta: Record<string, unknown>): string {
   return tags.join('\n  ');
 }
 
-// 추가 head 요소 생성 (css, font 등)
+// 추가 head 요소 생성 (css, font, script, katex 등)
 function buildExtraHead(meta: Record<string, unknown>): string {
   const extras: string[] = [];
+
+  // katex: true일 때 KaTeX CSS 추가 (기본값 false)
+  if (meta.katex === true) {
+    extras.push(`<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">`);
+  }
 
   // css: 문자열 또는 배열로 여러 CSS URL 지원
   if (meta.css) {
@@ -114,7 +131,28 @@ function buildExtraHead(meta: Record<string, unknown>): string {
     extras.push(`<style>body { font-family: '${meta.font}', sans-serif; }</style>`);
   }
 
+  // script: 외부 스크립트 URL 지원 (문자열 또는 배열)
+  if (meta.script) {
+    const scriptUrls = Array.isArray(meta.script) ? meta.script : [meta.script];
+    for (const url of scriptUrls) {
+      extras.push(`<script src="${url}"></script>`);
+    }
+  }
+
   return extras.join('\n  ');
+}
+
+// body 끝에 들어갈 스크립트 생성 (mermaid 초기화 등)
+function buildBodyScripts(meta: Record<string, unknown>): string {
+  const scripts: string[] = [];
+
+  // mermaid: true일 때 mermaid.js 추가 (기본값 false)
+  if (meta.mermaid === true) {
+    scripts.push(`<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>`);
+    scripts.push(`<script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>`);
+  }
+
+  return scripts.join('\n');
 }
 
 /**
@@ -175,7 +213,8 @@ export async function build(markdown: string, options: BuildOptions = {}): Promi
     .replace('{{title}}', title)
     .replace('{{meta}}', buildHeadTags(meta))
     .replace('{{head}}', buildExtraHead(meta))
-    .replace('{{content}}', highlighted);
+    .replace('{{content}}', highlighted)
+    .replace('{{bodyScripts}}', buildBodyScripts(meta));
 
   return { html, meta };
 }
