@@ -45,108 +45,25 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true,
   breaks: true
-});
-
-// 헤더 앵커 플러그인 (id만 추가, 링크 없음)
-md.use(anchor, {
-  permalink: false,
-  slugify: (s: string) => encodeURIComponent(String(s).trim().toLowerCase().replace(/\s+/g, '-'))
-});
-
-// 속성 플러그인 (class, id, 기타 속성 지원 - Tailwind 호환)
-// 사용법: # 제목 {.text-2xl .font-bold}
-//        문단 텍스트 {.text-gray-500 #my-id}
-//        ![이미지](url){.rounded-lg .shadow-md}
-md.use(attrs);
-
-// 컨테이너 속성 파싱 헬퍼 함수
-// [.class1 .class2 #id attr=value] 형식을 HTML 속성 문자열로 변환
-// 대괄호를 사용하여 markdown-it-attrs와 충돌 방지
-function parseContainerAttrs(info: string, tagName: string): string {
-  // 태그명 이후 부분 추출 (예: 'div [.flex]' → '[.flex]')
-  const afterTag = info.replace(new RegExp(`^${tagName}\\s*`, 'i'), '').trim();
-  // 대괄호 [] 안의 속성 파싱 (attrs 플러그인의 {} 와 구분)
-  const attrMatch = afterTag.match(/\[([^\]]+)\]/);
-  
-  if (!attrMatch) {
-    return '';
+}).use(
+  anchor, {
+    permalink: false,
+    slugify: (s: string) => encodeURIComponent(String(s).trim().toLowerCase().replace(/\s+/g, '-'))
   }
-  
-  const attrStr = attrMatch[1];
-  const classes: string[] = [];
-  const attrs: string[] = [];
-  
-  // 공백으로 분리하되, 따옴표 안의 공백은 보존
-  const parts = attrStr.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
-  
-  for (const part of parts) {
-    if (part.startsWith('.')) {
-      classes.push(part.slice(1));
-    } else if (part.startsWith('#')) {
-      attrs.push(`id="${part.slice(1)}"`);
-    } else if (part.includes('=')) {
-      // attr=value 또는 attr="value" 형식
-      const eqIndex = part.indexOf('=');
-      const key = part.slice(0, eqIndex);
-      let value = part.slice(eqIndex + 1);
-      // 따옴표가 없으면 추가
-      if (!value.startsWith('"')) {
-        value = `"${value}"`;
-      }
-      attrs.push(`${key}=${value}`);
-    }
+).use(
+  attrs
+).use(
+  container, {
+    name: 'div'
   }
-  
-  const classAttr = classes.length > 0 ? `class="${classes.join(' ')}"` : '';
-  return [classAttr, ...attrs].filter(Boolean).join(' ');
-}
+).use(
+  texmath, {
+    engine: katex,
+    delimiters: 'dollars',
+    katexOptions: { throwOnError: false }
+  }
+);
 
-// 컨테이너 플러그인 (중첩 div 지원 - Grid/Flex 레이아웃용)
-// 사용법: ::: div [.grid .grid-cols-2 .gap-4]
-//        ::: div [.flex .justify-between]
-//        내용...
-//        :::
-// 중첩: ::: div [.flex]
-//       ::: div [.w-1/2]
-//       :::
-//       :::
-// 주의: 대괄호 []를 사용 (중괄호 {}는 markdown-it-attrs와 충돌)
-/* md.use(container, {
-  name: 'div',
-  openRender: (tokens, index) => {
-    const info = tokens[index].info.trim();
-    const attrs = parseContainerAttrs(info, 'div');
-    return attrs ? `<div ${attrs}>\n` : '<div>\n';
-  },
-  closeRender: () => '</div>\n'
-});
-
-// 추가 시맨틱 컨테이너 태그들
-const containerTags = ['section', 'article', 'aside', 'header', 'footer', 'nav', 'main', 'span', 'figure'];
-for (const tag of containerTags) {
-  md.use(container, {
-    name: tag,
-    openRender: (tokens, index) => {
-      const info = tokens[index].info.trim();
-      const attrs = parseContainerAttrs(info, tag);
-      return attrs ? `<${tag} ${attrs}>\n` : `<${tag}>\n`;
-    },
-    closeRender: () => `</${tag}>\n`
-  });
-} */
-
-md.use(container, {
-  name: 'div'
-});
-
-// KaTeX 수식 플러그인
-md.use(texmath, {
-  engine: katex,
-  delimiters: 'dollars',  // $...$ 인라인, $$...$$ 블록
-  katexOptions: { throwOnError: false }
-});
-
-// Mermaid 코드 블록 처리 (클라이언트 사이드 렌더링)
 const defaultFence = md.renderer.rules.fence!.bind(md.renderer.rules);
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
