@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import MarkdownIt from 'markdown-it';
 import anchor from 'markdown-it-anchor';
+import attrs from 'markdown-it-attrs';
 import texmath from 'markdown-it-texmath';
 import katex from 'katex';
 import matter from 'gray-matter';
@@ -49,6 +50,16 @@ const md = new MarkdownIt({
 md.use(anchor, {
   permalink: false,
   slugify: (s: string) => encodeURIComponent(String(s).trim().toLowerCase().replace(/\s+/g, '-'))
+});
+
+// 속성 플러그인 (class, id, 기타 속성 지원 - Tailwind 호환)
+// 사용법: # 제목 {.text-2xl .font-bold}
+//        문단 텍스트 {.text-gray-500 #my-id}
+//        ![이미지](url){.rounded-lg .shadow-md}
+md.use(attrs, {
+  leftDelimiter: '{',
+  rightDelimiter: '}',
+  allowedAttributes: []  // 빈 배열 = 모든 속성 허용
 });
 
 // KaTeX 수식 플러그인
@@ -116,6 +127,11 @@ function buildExtraHead(meta: Record<string, unknown>): string {
   // katex: true일 때 KaTeX CSS 추가 (기본값 false)
   if (meta.katex === true) {
     extras.push(`<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">`);
+  }
+
+  // tailwind: true일 때 Tailwind CSS 추가 (기본값 false)
+  if (meta.tailwind === true) {
+    extras.push(`<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>`);
   }
 
   // css: 문자열 또는 배열로 여러 CSS URL 지원

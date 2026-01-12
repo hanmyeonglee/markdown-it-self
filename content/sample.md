@@ -11,6 +11,7 @@ font: Pretendard
 theme: min-light
 katex: true
 mermaid: true
+tailwind: true
 css:
   - https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css
 ---
@@ -79,6 +80,21 @@ sequenceDiagram
     S->>B: WebSocket 알림
     B->>B: 페이지 새로고침
 ```
+
+### attrs 플러그인 {.text-4xl .font-bold .text-blue-600}
+
+일반 문단입니다. {.text-gray-700 .leading-relaxed}
+
+- 리스트 아이템 {.text-red-500}
+- 다른 아이템
+
+![이미지](https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Google_Images_2015_logo.svg/1200px-Google_Images_2015_logo.svg.png){.rounded-xl .shadow-lg .w-full}
+
+[링크](https://example.com){.text-blue-500 .hover:underline #my-link}
+
+> 인용문 {.bg-gray-100 .p-4 .border-l-4 .border-blue-500}
+
+`인라인 코드`{.bg-yellow-100 .px-1 .rounded}
 
 ---
 
