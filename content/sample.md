@@ -7,8 +7,11 @@ keywords:
   - renderer
   - hot-reload
 lang: ko
-font: Noto Sans KR
+font: Pretendard
 theme: min-light
+css:
+  - https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css
+  - https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css
 ---
 
 # 🚀 마크다운 렌더러 테스트
@@ -54,6 +57,15 @@ function hello() {
 | 렌더링 | ✅ |
 | 핫로드 | ✅ |
 | 실시간 | ✅ |
+
+### KaTeX
+
+$E=mc^2$
+$a^2+b^2=c^2$
+$\frac{1}{x^2+1}$
+$$
+\int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
+$$
 
 ---
 

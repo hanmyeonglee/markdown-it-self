@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import MarkdownIt from 'markdown-it';
 import anchor from 'markdown-it-anchor';
+import texmath from 'markdown-it-texmath';
+import katex from 'katex';
 import matter from 'gray-matter';
 import { createHighlighter, Highlighter } from 'shiki';
 
@@ -49,6 +51,13 @@ md.use(anchor, {
   slugify: (s: string) => encodeURIComponent(String(s).trim().toLowerCase().replace(/\s+/g, '-'))
 });
 
+// KaTeX 수식 플러그인
+md.use(texmath, {
+  engine: katex,
+  delimiters: 'dollars',  // $...$ 인라인, $$...$$ 블록
+  katexOptions: { throwOnError: false }
+});
+
 // 기본 경로
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const TEMPLATE_PATH = path.join(ROOT_DIR, 'public', 'template.html');
@@ -88,15 +97,20 @@ function buildHeadTags(meta: Record<string, unknown>): string {
   return tags.join('\n  ');
 }
 
-// 추가 head 요소 생성 (font, css 등)
+// 추가 head 요소 생성 (css, font 등)
 function buildExtraHead(meta: Record<string, unknown>): string {
   const extras: string[] = [];
 
+  // css: 문자열 또는 배열로 여러 CSS URL 지원
   if (meta.css) {
-    extras.push(`<link rel="stylesheet" href="${meta.css}">`);
+    const cssUrls = Array.isArray(meta.css) ? meta.css : [meta.css];
+    for (const url of cssUrls) {
+      extras.push(`<link rel="stylesheet" href="${url}">`);
+    }
   }
+
+  // font: 기본 폰트 패밀리 설정 (URL 요청 없이 로컬/시스템 폰트)
   if (meta.font) {
-    extras.push(`<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(String(meta.font))}&display=swap">`);
     extras.push(`<style>body { font-family: '${meta.font}', sans-serif; }</style>`);
   }
 
