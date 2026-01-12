@@ -1,3 +1,15 @@
+---
+title: 마크다운 렌더러 테스트
+description: 커스텀 마크다운 렌더러 테스트 페이지입니다
+author: Your Name
+keywords:
+  - markdown
+  - renderer
+  - hot-reload
+lang: ko
+font: Noto Sans KR
+---
+
 # 🚀 마크다운 렌더러 테스트
 
 이 파일을 수정하면 **실시간**으로 브라우저에 반영됩니다!

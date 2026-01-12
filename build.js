@@ -6,13 +6,20 @@ const CONTENT_DIR = path.join(__dirname, 'content');
 const OUTPUT_DIR = path.join(__dirname, 'dist');
 
 // HTML 템플릿
-function htmlTemplate(content, title = 'Markdown') {
+function htmlTemplate(content, meta = {}) {
+  const title = meta.title || 'Markdown';
+  const description = meta.description ? `\n  <meta name="description" content="${meta.description}">` : '';
+  const author = meta.author ? `\n  <meta name="author" content="${meta.author}">` : '';
+  const keywords = meta.keywords ? `\n  <meta name="keywords" content="${meta.keywords.join(', ')}">` : '';
+  const customCss = meta.css ? `\n  <link rel="stylesheet" href="${meta.css}">` : '';
+  const customFont = meta.font ? `\n  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(meta.font)}&display=swap">\n  <style>body { font-family: '${meta.font}', sans-serif; }</style>` : '';
+  
   return `<!DOCTYPE html>
-<html lang="ko">
+<html lang="${meta.lang || 'ko'}">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">${description}${author}${keywords}
+  <title>${title}</title>${customCss}${customFont}
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -62,9 +69,14 @@ function buildFile(filename) {
   }
   
   const markdown = fs.readFileSync(inputPath, 'utf-8');
-  const html = renderer.render(markdown);
-  const title = path.basename(filename, '.md');
-  const fullHtml = htmlTemplate(html, title);
+  const { html, meta } = renderer.parse(markdown);
+  
+  // title이 없으면 파일명 사용
+  if (!meta.title) {
+    meta.title = path.basename(filename, '.md');
+  }
+  
+  const fullHtml = htmlTemplate(html, meta);
   
   if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
