@@ -2,6 +2,37 @@ import fs from 'fs';
 import path from 'path';
 import MarkdownIt from 'markdown-it';
 import matter from 'gray-matter';
+import { createHighlighter, Highlighter } from 'shiki';
+
+// Shiki 하이라이터 (싱글톤)
+let highlighter: Highlighter | null = null;
+
+async function getHighlighter(): Promise<Highlighter> {
+  if (!highlighter) {
+    highlighter = await createHighlighter({
+      themes: [
+        'github-dark', 'github-light',
+        'dracula', 'dracula-soft',
+        'nord',
+        'one-dark-pro',
+        'monokai',
+        'vitesse-dark', 'vitesse-light',
+        'catppuccin-mocha', 'catppuccin-latte',
+        'tokyo-night',
+        'slack-dark', 'slack-ochin',
+        'min-dark', 'min-light'
+      ],
+      langs: [
+        'javascript', 'typescript', 'python', 'java', 'c', 'cpp', 'csharp',
+        'go', 'rust', 'ruby', 'php', 'swift', 'kotlin', 'scala',
+        'html', 'css', 'scss', 'json', 'yaml', 'xml', 'markdown',
+        'sql', 'graphql', 'bash', 'powershell', 'dockerfile',
+        'plaintext'
+      ]
+    });
+  }
+  return highlighter;
+}
 
 // Markdown-it 인스턴스
 const md = new MarkdownIt({
@@ -24,6 +55,7 @@ export interface BuildResult {
 
 export interface BuildOptions {
   title?: string;
+  theme?: 'github-dark' | 'github-light';
 }
 
 // 템플릿 로드
@@ -65,11 +97,54 @@ function buildExtraHead(meta: Record<string, unknown>): string {
 }
 
 /**
+ * 코드 블록에 Shiki 하이라이팅 적용
+ */
+async function highlightCodeBlocks(html: string, theme: string): Promise<string> {
+  const hl = await getHighlighter();
+  const codeBlockRegex = /<pre><code class="language-(\w+)">([\s\S]*?)<\/code><\/pre>/g;
+  
+  const matches = [...html.matchAll(codeBlockRegex)];
+  let result = html;
+  
+  for (const match of matches) {
+    const [fullMatch, lang, code] = match;
+    const decodedCode = code
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+    
+    try {
+      const loadedLangs = hl.getLoadedLanguages();
+      const langToUse = loadedLangs.includes(lang) ? lang : 'plaintext';
+      let highlighted = hl.codeToHtml(decodedCode.trim(), { lang: langToUse, theme });
+      
+      // light 테마의 흰 배경을 연한 회색으로 변경
+      if (theme.includes('light') || theme.includes('latte') || theme === 'slack-ochin' || theme === 'nord') {
+        highlighted = highlighted
+          .replace(/background-color:#fff([;"])/gi, 'background-color:#f6f8fa$1')
+          .replace(/background-color:#ffffff([;"])/gi, 'background-color:#f6f8fa$1')
+          .replace(/background-color:#fafafa([;"])/gi, 'background-color:#f0f0f0$1');
+      }
+      
+      result = result.replace(fullMatch, highlighted);
+    } catch {
+      // 하이라이팅 실패시 원본 유지
+    }
+  }
+  
+  return result;
+}
+
+/**
  * 마크다운 문자열을 완성된 HTML로 빌드
  */
-export function build(markdown: string, options: BuildOptions = {}): BuildResult {
+export async function build(markdown: string, options: BuildOptions = {}): Promise<BuildResult> {
   const { data: meta, content } = matter(markdown);
   const rendered = md.render(content);
+  const theme = options.theme || (meta.theme as string) || 'github-dark';
+  const highlighted = await highlightCodeBlocks(rendered, theme);
 
   const template = loadTemplate();
   const title = (meta.title as string) || options.title || 'Untitled';
@@ -79,7 +154,7 @@ export function build(markdown: string, options: BuildOptions = {}): BuildResult
     .replace('{{title}}', title)
     .replace('{{meta}}', buildHeadTags(meta))
     .replace('{{head}}', buildExtraHead(meta))
-    .replace('{{content}}', rendered);
+    .replace('{{content}}', highlighted);
 
   return { html, meta };
 }
@@ -87,15 +162,17 @@ export function build(markdown: string, options: BuildOptions = {}): BuildResult
 /**
  * 마크다운 문자열을 HTML 본문만 렌더링 (템플릿 없이)
  */
-export function render(markdown: string): string {
-  const { content } = matter(markdown);
-  return md.render(content);
+export async function render(markdown: string, themeOverride?: string): Promise<string> {
+  const { data: meta, content } = matter(markdown);
+  const theme = themeOverride || (meta.theme as string) || 'github-dark';
+  const rendered = md.render(content);
+  return highlightCodeBlocks(rendered, theme);
 }
 
 /**
  * 파일에서 읽어서 빌드
  */
-export function buildFile(filePath: string): BuildResult {
+export async function buildFile(filePath: string): Promise<BuildResult> {
   const markdown = fs.readFileSync(filePath, 'utf-8');
   const filename = path.basename(filePath, '.md');
   return build(markdown, { title: filename });
@@ -104,8 +181,8 @@ export function buildFile(filePath: string): BuildResult {
 /**
  * 파일 빌드 후 저장
  */
-export function buildAndSave(inputPath: string, outputPath?: string): string {
-  const { html } = buildFile(inputPath);
+export async function buildAndSave(inputPath: string, outputPath?: string): Promise<string> {
+  const { html } = await buildFile(inputPath);
 
   if (!outputPath) {
     const filename = path.basename(inputPath, '.md') + '.html';
@@ -124,7 +201,7 @@ export function buildAndSave(inputPath: string, outputPath?: string): string {
 /**
  * content 폴더 전체 빌드
  */
-export function buildAll(): Array<{ input: string; output: string }> {
+export async function buildAll(): Promise<Array<{ input: string; output: string }>> {
   if (!fs.existsSync(CONTENT_DIR)) {
     return [];
   }
@@ -134,7 +211,7 @@ export function buildAll(): Array<{ input: string; output: string }> {
 
   for (const file of files) {
     const inputPath = path.join(CONTENT_DIR, file);
-    const outputPath = buildAndSave(inputPath);
+    const outputPath = await buildAndSave(inputPath);
     outputs.push({ input: file, output: outputPath });
   }
 
@@ -149,7 +226,7 @@ export function getInstance(): MarkdownIt {
 }
 
 // CLI 실행
-if (require.main === module) {
+async function main() {
   const args = process.argv.slice(2);
 
   console.log('📦 빌드 시작...\n');
@@ -158,18 +235,22 @@ if (require.main === module) {
     for (const file of args) {
       try {
         const inputPath = path.isAbsolute(file) ? file : path.join(CONTENT_DIR, file);
-        const outputPath = buildAndSave(inputPath);
+        const outputPath = await buildAndSave(inputPath);
         console.log(`✅ ${path.basename(file)} → ${path.basename(outputPath)}`);
       } catch (err) {
         console.error(`❌ ${file}: ${(err as Error).message}`);
       }
     }
   } else {
-    const results = buildAll();
+    const results = await buildAll();
     for (const { input, output } of results) {
       console.log(`✅ ${input} → ${path.basename(output)}`);
     }
   }
 
   console.log(`\n📁 출력: ${OUTPUT_DIR}`);
+}
+
+if (require.main === module) {
+  main();
 }

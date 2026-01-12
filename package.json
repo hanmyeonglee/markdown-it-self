@@ -16,6 +16,7 @@
     "gray-matter": "^4.0.3",
     "markdown-it": "^14.0.0",
     "module-alias": "^2.2.3",
+    "shiki": "^3.21.0",
     "ws": "^8.16.0"
   },
   "devDependencies": {

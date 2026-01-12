@@ -25,7 +25,7 @@ interface RenderResult {
 }
 
 // 마크다운 파일 읽기 및 렌더링
-function getRenderedContent(filename: string = DEFAULT_FILE): RenderResult {
+async function getRenderedContent(filename: string = DEFAULT_FILE): Promise<RenderResult> {
   const filePath = path.join(CONTENT_DIR, filename);
 
   if (!fs.existsSync(filePath)) {
@@ -33,15 +33,15 @@ function getRenderedContent(filename: string = DEFAULT_FILE): RenderResult {
   }
 
   const markdown = fs.readFileSync(filePath, 'utf-8');
-  const html = render(markdown);
+  const html = await render(markdown);
 
   return { html, filename };
 }
 
 // API: 마크다운 렌더링
-app.get('/api/render', (req, res) => {
+app.get('/api/render', async (req, res) => {
   const filename = (req.query.file as string) || DEFAULT_FILE;
-  const result = getRenderedContent(filename);
+  const result = await getRenderedContent(filename);
   res.json(result);
 });
 
@@ -56,11 +56,11 @@ app.get('/api/files', (_req, res) => {
 });
 
 // WebSocket 연결 처리
-wss.on('connection', (ws) => {
+wss.on('connection', async (ws) => {
   console.log('🔌 클라이언트 연결됨');
 
   // 초기 렌더링 전송
-  const result = getRenderedContent();
+  const result = await getRenderedContent();
   ws.send(JSON.stringify({ type: 'render', data: result }));
 
   ws.on('close', () => {
@@ -74,11 +74,11 @@ const watcher = chokidar.watch(CONTENT_DIR, {
   persistent: true
 });
 
-watcher.on('change', (filePath) => {
+watcher.on('change', async (filePath) => {
   const filename = path.basename(filePath);
   console.log(`📝 파일 변경 감지: ${filename}`);
 
-  const result = getRenderedContent(filename);
+  const result = await getRenderedContent(filename);
 
   // 모든 연결된 클라이언트에게 업데이트 전송
   wss.clients.forEach((client) => {

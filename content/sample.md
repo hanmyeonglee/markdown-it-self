@@ -8,6 +8,7 @@ keywords:
   - hot-reload
 lang: ko
 font: Noto Sans KR
+theme: min-light
 ---
 
 # 🚀 마크다운 렌더러 테스트
