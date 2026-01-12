@@ -16,23 +16,23 @@ async function getHighlighter(): Promise<Highlighter> {
   if (!highlighter) {
     highlighter = await createHighlighter({
       themes: [
-        'github-dark', 'github-light',
-        'dracula', 'dracula-soft',
-        'nord',
-        'one-dark-pro',
-        'monokai',
-        'vitesse-dark', 'vitesse-light',
-        'catppuccin-mocha', 'catppuccin-latte',
-        'tokyo-night',
-        'slack-dark', 'slack-ochin',
-        'min-dark', 'min-light'
+        'andromeeda', 'aurora-x', 'ayu-dark', 
+        'catppuccin-frappe', 'catppuccin-latte', 'catppuccin-macchiato', 'catppuccin-mocha', 
+        'dark-plus', 'dracula', 'dracula-soft', 'everforest-dark', 'everforest-light', 
+        'github-dark', 'github-dark-default', 'github-dark-dimmed', 'github-dark-high-contrast', 
+        'github-light', 'github-light-default', 'github-light-high-contrast', 
+        'gruvbox-dark-hard', 'gruvbox-dark-medium', 'gruvbox-dark-soft', 'gruvbox-light-hard', 
+        'gruvbox-light-medium', 'gruvbox-light-soft', 
+        'houston', 'kanagawa-dragon', 'kanagawa-lotus', 'kanagawa-wave', 'laserwave', 'light-plus', 
+        'material-theme', 'material-theme-darker', 'material-theme-lighter', 'material-theme-ocean', 
+        'material-theme-palenight', 'min-dark', 'min-light', 'monokai', 'night-owl', 'nord', 
+        'one-dark-pro', 'one-light', 'plastic', 'poimandres', 'red', 
+        'rose-pine', 'rose-pine-dawn', 'rose-pine-moon', 'slack-dark', 'slack-ochin', 
+        'snazzy-light', 'solarized-dark', 'solarized-light', 'synthwave-84', 'tokyo-night', 
+        'vesper', 'vitesse-black', 'vitesse-dark', 'vitesse-light'
       ],
       langs: [
-        'javascript', 'typescript', 'python', 'java', 'c', 'cpp', 'csharp',
-        'go', 'rust', 'ruby', 'php', 'swift', 'kotlin', 'scala',
-        'html', 'css', 'scss', 'json', 'yaml', 'xml', 'markdown',
-        'sql', 'graphql', 'bash', 'powershell', 'dockerfile',
-        'plaintext'
+        'abap', 'actionscript-3', 'ada', 'angular-html', 'angular-ts', 'apache', 'apex', 'apl', 'applescript', 'ara', 'asciidoc', 'asm', 'astro', 'awk', 'ballerina', 'bat', 'beancount', 'berry', 'bibtex', 'bicep', 'blade', 'bsl', 'c', 'c3', 'cadence', 'cairo', 'clarity', 'clojure', 'cmake', 'cobol', 'codeowners', 'codeql', 'coffee', 'common-lisp', 'coq', 'cpp', 'crystal', 'csharp', 'css', 'csv', 'cue', 'cypher', 'd', 'dart', 'dax', 'desktop', 'diff', 'docker', 'dotenv', 'dream-maker', 'edge', 'elixir', 'elm', 'emacs-lisp', 'erb', 'erlang', 'fennel', 'fish', 'fluent', 'fortran-fixed-form', 'fortran-free-form', 'fsharp', 'gdresource', 'gdscript', 'gdshader', 'genie', 'gherkin', 'git-commit', 'git-rebase', 'gleam', 'glimmer-js', 'glimmer-ts', 'glsl', 'gn', 'gnuplot', 'go', 'graphql', 'groovy', 'hack', 'haml', 'handlebars', 'haskell', 'haxe', 'hcl', 'hjson', 'hlsl', 'html', 'html-derivative', 'http', 'hurl', 'hxml', 'hy', 'imba', 'ini', 'java', 'javascript', 'jinja', 'jison', 'json', 'json5', 'jsonc', 'jsonl', 'jsonnet', 'jssm', 'jsx', 'julia', 'kdl', 'kotlin', 'kusto', 'latex', 'lean', 'less', 'liquid', 'llvm', 'log', 'logo', 'lua', 'luau', 'make', 'markdown', 'marko', 'matlab', 'mdc', 'mdx', 'mermaid', 'mipsasm', 'mojo', 'moonbit', 'move', 'narrat', 'nextflow', 'nginx', 'nim', 'nix', 'nushell', 'objective-c', 'objective-cpp', 'ocaml', 'openscad', 'pascal', 'perl', 'php', 'pkl', 'plsql', 'po', 'polar', 'postcss', 'powerquery', 'powershell', 'prisma', 'prolog', 'proto', 'pug', 'puppet', 'purescript', 'python', 'qml', 'qmldir', 'qss', 'r', 'racket', 'raku', 'razor', 'reg', 'regexp', 'rel', 'riscv', 'rosmsg', 'rst', 'ruby', 'rust', 'sas', 'sass', 'scala', 'scheme', 'scss', 'sdbl', 'shaderlab', 'shellscript', 'shellsession', 'smalltalk', 'solidity', 'soy', 'sparql', 'splunk', 'sql', 'ssh-config', 'stata', 'stylus', 'svelte', 'swift', 'system-verilog', 'systemd', 'talonscript', 'tasl', 'tcl', 'templ', 'terraform', 'tex', 'toml', 'ts-tags', 'tsv', 'tsx', 'turtle', 'twig', 'typescript', 'typespec', 'typst', 'v', 'vala', 'vb', 'verilog', 'vhdl', 'viml', 'vue', 'vue-html', 'vue-vine', 'vyper', 'wasm', 'wenyan', 'wgsl', 'wikitext', 'wit', 'wolfram', 'xml', 'xsl', 'yaml', 'zenscript', 'zig'
       ]
     });
   }
