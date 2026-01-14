@@ -9,6 +9,7 @@ import katex from 'katex';
 import matter from 'gray-matter';
 import { createHighlighter, Highlighter } from 'shiki';
 import bspans from 'markdown-it-bracketed-spans';
+import { full as emoji } from 'markdown-it-emoji'
 
 // 기본 경로
 const ROOT_DIR = path.join(__dirname, '..', '..');
@@ -92,6 +93,8 @@ const md = new MarkdownIt({
   }
 ).use(
   bspans
+).use(
+  emoji
 ).use(
   attrs
 );
