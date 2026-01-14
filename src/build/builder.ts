@@ -83,7 +83,13 @@ const md = new MarkdownIt({
   }
 ).use(
   container, {
-    name: 'div'
+    name: 'div',
+  }
+).use(
+  container, {
+    name: 'nothing',
+    openRender: () => '',
+    closeRender: () => ''
   }
 ).use(
   texmath, {
